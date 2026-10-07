@@ -501,8 +501,14 @@ export const register: Register = on => {
     const plot = await read($, last)
     const working = await read($, busy)
     const plots = (await read($, history)) ?? []
-    const body = (e.props as { bodyColumns?: number }).bodyColumns ?? e.viewport?.columns ?? 80
-    const maxRows = Math.max(6, (e.viewport?.rows ?? 40) - 6)
+    const props = e.props as { bodyColumns?: number; placement?: 'dock' | 'inline'; scroll?: { bodyRows: number } }
+    const body = props.bodyColumns ?? e.viewport?.columns ?? 80
+    // Docked, the pane fills its height and the toolbar sits on the bottom row(s).
+    const docked = props.placement === 'dock' && !!props.scroll?.bodyRows
+    const barRows = body < 64 ? 2 : 1
+    const maxRows = docked
+      ? Math.max(4, props.scroll!.bodyRows - 1 - barRows - 1)
+      : Math.max(6, (e.viewport?.rows ?? 40) - 6)
 
     if (!plot) {
       return (
@@ -545,16 +551,18 @@ export const register: Register = on => {
     }
 
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" height={docked ? props.scroll!.bodyRows : undefined}>
         <Text bold>
           {plot.title} <Text dimColor>{index >= 0 ? `${index + 1}/${plots.length} · ` : ''}{plot.kind}{working ? ` · rendering ${working}…` : ''}</Text>
         </Text>
-        {Image && png ? (
-          <Image source={{ png }} columns={columns} rows={rows} alt={plot.title} />
-        ) : (
-          <Text dimColor>{plot.png}</Text>
-        )}
-        <Box flexDirection="row" gap={1}>
+        <Box flexDirection="column" flexGrow={1}>
+          {Image && png ? (
+            <Image source={{ png }} columns={columns} rows={rows} alt={plot.title} />
+          ) : (
+            <Text dimColor>{plot.png}</Text>
+          )}
+        </Box>
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
           <Button hotkey="b" onPress={() => step(-1)} dimColor={index <= 0}>←</Button>
           <Button hotkey="n" onPress={() => step(1)} dimColor={index < 0 || index >= plots.length - 1}>→</Button>
           <Button hotkey="p" onPress={() => exportAndReveal('pdf')}>PDF</Button>
