@@ -403,7 +403,7 @@ export const register: Register = on => {
     await registerTool($)
     await $.command.register({
       name: 'sciplot',
-      description: 'Show the sciplot pane; /sciplot engines | delete | export pdf,svg [dir]',
+      description: 'Show the sciplot pane; /sciplot engines | delete | close | export pdf,svg [dir]',
     })
     return next(e)
   })
@@ -482,10 +482,14 @@ export const register: Register = on => {
       if (!home) await detect($)
       return { text: await deleteCurrent($) }
     }
+    if (args[0] === 'close') {
+      await $.ui.close({ id: PANE })
+      return { text: 'sciplot pane closed. /sciplot reopens it.' }
+    }
     if (args[0] !== 'export') {
       const waiting = await openPane($)
       if (waiting) return { text: `sciplot pane could not be placed: ${waiting}` }
-      return { text: 'sciplot pane opened. Ask Claude to plot something; /sciplot engines; /sciplot export pdf,svg [dir].' }
+      return { text: 'sciplot pane opened. Ask Claude to plot something; /sciplot engines; /sciplot export pdf,svg [dir]; /sciplot close.' }
     }
     const plot = await read($, last)
     if (!plot) return { text: 'Nothing plotted yet.' }

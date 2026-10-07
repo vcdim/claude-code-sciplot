@@ -41,3 +41,11 @@ test('/sciplot delete with nothing plotted says so', async ($, on) => {
   const ran = await $.command.run({ command: 'sciplot', args: 'delete' } as never)
   expect(JSON.stringify(ran)).toContain('Nothing to delete')
 })
+
+test('/sciplot close closes the pane', async ($, on) => {
+  const closed: string[] = []
+  on('ui.close', async (_$, e) => { closed.push(e.id); return { value: undefined } })
+  const ran = await $.command.run({ command: 'sciplot', args: 'close' } as never)
+  expect(JSON.stringify(ran)).toContain('closed')
+  expect(closed).toEqual(['sciplot'])
+})
