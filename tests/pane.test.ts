@@ -25,3 +25,30 @@ test('the docked pane draws the plot as an Image sized to its aspect', async ($,
   // The Image sits directly in the column, 95 x 12 cells.
   expect(root.children[1]).toMatchObject({ type: 'Image', props: { columns: 95, rows: 10 } })
 })
+
+test('a plotly figure goes live: a Client over the picture takes the pointer', async ($, on) => {
+  const plotly = { kind: 'plotly', files: { png: '/h/plot.png', html: '/h/plot.html' }, size: [1800, 1400] }
+  on('process.run', async (_$, e) => {
+    const argv = (e as unknown as { argv: string[] }).argv
+    return argv[0] === 'sh' ? ok('home=/h\nuv=/bin/uv\n') : ok(`SCIPLOT_RESULT ${JSON.stringify(plotly)}\n`)
+  })
+  const spawned: string[][] = []
+  on('process.spawn', async function* (_$, e) {
+    spawned.push((e as unknown as { argv: string[] }).argv)
+    yield { stream: 'stdout', text: '{"ready": "/h/.cache/sciplot/live.sock"}\n' }
+    return { value: { code: 0, signal: null } }
+  } as never)
+  on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: '{"version": 0, "frame": null, "error": null}' } }))
+  on('fs.write', async () => ({ value: undefined }))
+  on('fs.read', async () => ({ value: { base64: PNG } }))
+  on('ui.open', async () => ({ value: undefined }))
+  await $.tool.call({ tool: 'mcp__sciplot__plot', code: 'fig = go.Figure()', title: 'surface' })
+
+  const ui = await $.ui.mount({
+    plugin: 'sciplot', surface: 'terminal', component: 'Pane',
+    requestId: 'sciplot', props: { bodyColumns: 96, placement: 'dock', scroll: { bodyRows: 36 } } as never,
+  })
+  const client = await ui.find({ type: 'Client' } as never)
+  expect(client).toMatchObject({ props: { module: 'hooks/live.tsx', width: 95, height: 33 } })
+  expect(spawned[0]?.some(arg => arg.endsWith('scripts/live_view.py'))).toBe(true)
+})

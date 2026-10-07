@@ -55,8 +55,13 @@ fall back to a free option. `/sciplot engines` shows what was found.
 | `/sciplot delete` | move the current plot to the Trash |
 | `/sciplot engines` | show which engines are installed |
 
-Pane keys: `b` / `n` previous / next plot, `p` PDF, `s` SVG, `g` PNG,
-`i` interactive HTML (plotly), `d` delete.
+Pane keys: `b` / `n` previous / next plot, `p` PDF, `s` SVG, `g` PNG, `d` delete;
+for plotly, `i` live / static and `o` open in the browser.
+
+**Live plotly.** A plotly figure is interactive right in the pane: drag to rotate
+or pan, scroll to zoom, hover for values. A headless Chrome (your installed
+Google Chrome, else Playwright's Chromium) draws the figure and the pane forwards
+the mouse to it.
 
 Each plot is kept in `~/.cache/sciplot/<timestamp>/` with its script and exports,
 so any figure can be rerun or edited by hand.

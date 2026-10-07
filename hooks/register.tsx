@@ -395,6 +395,132 @@ function enginesReport(): string {
     .join('\n')
 }
 
+// ---------------------------------------------------------------- live plotly view
+
+// A headless browser (scripts/live_view.py) draws a plotly figure's HTML into PNG
+// frames; the pane shows them and hands the pointer back, so the figure rotates,
+// zooms and hovers in place.
+type LiveFrame = { file: string; generation: number; cols: number; rows: number }
+
+const LIVE_KEY = 'live'
+const live = {
+  sock: '',
+  starting: null as Promise<string | null> | null,
+  ready: false,
+  wanted: true, // show plotly figures live; `i` toggles
+  plotId: null as string | null, // the plot shown live
+  region: null as { cols: number; rows: number } | null,
+  pending: null as string | null, // html to open once the pane reports its size
+  frame: null as LiveFrame | null,
+  mounted: null as { cols: number; rows: number } | null,
+  error: null as string | null,
+  watcher: 0,
+}
+
+async function liveCall($: EngineInterface, path: string, body?: unknown): Promise<any> {
+  try {
+    const res = await $.http.fetch(`http://sciplot${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      socketPath: live.sock,
+      headers: { 'content-type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    return res.ok ? JSON.parse(res.text || '{}') : null
+  } catch {
+    return null
+  }
+}
+
+// Starts the browser process once per session; resolves to why it could not, or null.
+function startLive($: EngineInterface): Promise<string | null> {
+  if (live.ready) return Promise.resolve(null)
+  if (live.starting) return live.starting
+  live.sock = `${home}/.cache/sciplot/live.sock`
+  const argv = [
+    bins.uv!, 'run', '--no-project', '--quiet', '--with', 'playwright', '--with', 'aiohttp',
+    'python', `${$.plugin.root}/scripts/live_view.py`, live.sock, `${home}/.cache/sciplot/live`,
+  ]
+  live.starting = new Promise(resolve => {
+    void (async () => {
+      let said = false
+      let stderr = ''
+      try {
+        for await (const { stream, text } of $.process.spawn({ argv })) {
+          if (stream === 'stderr') stderr = (stderr + text).slice(-2000)
+          if (!said && stream === 'stdout' && text.includes('"ready"')) {
+            said = true
+            live.ready = true
+            resolve(null)
+            void watchLive($)
+          }
+        }
+      } catch (err) {
+        stderr += String(err)
+      }
+      live.ready = false
+      live.starting = null
+      live.watcher++
+      const why = stderr.trim().split('\n').pop() || 'the live view process exited'
+      if (stderr.trim()) $.ui.log(`sciplot live view: ${stderr.trim()}`, { to: 'debug' })
+      if (!said) resolve(why)
+    })()
+  })
+  return live.starting
+}
+
+// Long-polls the browser for frames and swaps each into the mounted Image.
+async function watchLive($: EngineInterface): Promise<void> {
+  const me = ++live.watcher
+  let version = -1
+  while (live.watcher === me && live.ready) {
+    const s = await liveCall($, `/state?version=${version}`)
+    if (live.watcher !== me) return
+    if (!s) {
+      await $.clock.sleep(250)
+      continue
+    }
+    version = s.version
+    if (s.error && s.error !== live.error) $.ui.toast(`Live view: ${String(s.error).split('\n')[0]}`)
+    live.error = s.error ?? null
+    const f = s.frame as LiveFrame | null
+    if (!live.plotId || !f || f.generation === live.frame?.generation) continue
+    live.frame = f
+    const m = live.mounted
+    if (m && m.cols === f.cols && m.rows === f.rows) {
+      const r = await $.ui.blit({ requestId: PANE, key: LIVE_KEY, source: { file: f.file, format: 'png', generation: f.generation } })
+      if (!r.deny) continue
+    }
+    $.ui.invalidate('ui.render')
+  }
+}
+
+async function goLive($: EngineInterface, plot: Plot): Promise<void> {
+  live.plotId = plot.id
+  live.frame = null
+  const done = await ensureFormats($, plot, ['html'])
+  const why = typeof done === 'string' ? done : await startLive($)
+  if (live.plotId !== plot.id) return
+  if (why || typeof done === 'string') {
+    live.plotId = null
+    live.wanted = false
+    $.ui.toast(`Live view unavailable: ${why}`)
+    $.ui.invalidate('ui.render')
+    return
+  }
+  if (live.region) await liveCall($, '/open', { html: done.files.html, ...live.region })
+  else live.pending = done.files.html!
+}
+
+function stopLive($: EngineInterface): void {
+  if (!live.plotId) return
+  live.plotId = null
+  live.frame = null
+  live.pending = null
+  live.region = null
+  live.mounted = null
+  if (live.ready) void liveCall($, '/close', {})
+}
+
 // ---------------------------------------------------------------- hooks
 
 export const register: Register = on => {
@@ -502,7 +628,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Image } = $.ui.resolve(e) as ReturnType<typeof $.ui.resolve> & { Image?: any }
+    const { Box, Text, Button, Image, Client } = $.ui.resolve(e) as ReturnType<typeof $.ui.resolve> & { Image?: any; Client?: any }
     const plot = await read($, last)
     const working = await read($, busy)
     const plots = (await read($, history)) ?? []
@@ -539,6 +665,17 @@ export const register: Register = on => {
       columns = Math.max(10, Math.min(columns, Math.round((rows * cell * plot.width) / Math.max(1, plot.height))))
     }
 
+    // Plotly figures go live: a headless browser draws them and takes the pointer.
+    if (live.plotId && live.plotId !== plot.id) stopLive($)
+    const canLive = plot.kind === 'plotly' && !!Image && !!Client && e.surface === 'terminal'
+    if (canLive && live.wanted && !live.plotId) void goLive($, plot)
+    const isLive = canLive && live.plotId === plot.id
+    if (isLive) {
+      columns = Math.max(10, Math.min(255, body - 1))
+      rows = maxRows
+      live.mounted = live.frame ? { cols: columns, rows } : null
+    }
+
     const index = plots.findIndex(p => p.id === plot.id)
     const step = async (delta: number) => {
       const list = (await read($, history)) ?? []
@@ -561,14 +698,25 @@ export const register: Register = on => {
         <Text bold>
           {plot.title} <Text dimColor>{index >= 0 ? `${index + 1}/${plots.length} · ` : ''}{plot.kind}{working ? ` · rendering ${working}…` : ''}</Text>
         </Text>
-        {Image && png ? (
+        {isLive ? (
+          <Box flexDirection="column" width={columns} height={rows}>
+            {live.frame ? (
+              <Image key={LIVE_KEY} source={{ file: live.frame.file, format: 'png', generation: live.frame.generation }} columns={columns} rows={rows} alt={plot.title} />
+            ) : (
+              <Text dimColor>Starting the live view…</Text>
+            )}
+            <Box position="absolute" top={0} left={0} width={columns} height={rows}>
+              <Client key={`live-${plot.id}`} module="./live.tsx" width={columns} height={rows} />
+            </Box>
+          </Box>
+        ) : Image && png ? (
           // Keep it a direct child of an unsized column: wrapped or in a fixed-height pane it drew clipped or not at all.
           <Image key={`${plot.id}-${columns}x${rows}`} source={{ png }} columns={columns} rows={rows} alt={plot.title} />
         ) : (
           <Text dimColor>{plot.png}</Text>
         )}
         {/* Docked, a fixed-height spacer (not flexGrow in a sized column) pushes the toolbar to the bottom. */}
-        {docked && Image && png && <Box height={Math.max(0, props.scroll!.bodyRows - 1 - rows - barRows)} />}
+        {docked && (isLive || (Image && png)) && <Box height={Math.max(0, props.scroll!.bodyRows - 1 - rows - barRows)} />}
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
           <Button hotkey="b" onPress={() => step(-1)} dimColor={index <= 0}>←</Button>
           <Button hotkey="n" onPress={() => step(1)} dimColor={index < 0 || index >= plots.length - 1}>→</Button>
@@ -576,14 +724,55 @@ export const register: Register = on => {
           <Button hotkey="s" onPress={() => exportAndReveal('svg')}>SVG</Button>
           <Button hotkey="g" onPress={() => exportAndReveal('png')}>PNG</Button>
           <Button hotkey="d" dimColor onPress={async () => $.ui.toast(await deleteCurrent($))}>Delete</Button>
-          {plot.kind === 'plotly' && (
+          {canLive && (
             <Button hotkey="i" onPress={async () => {
+              live.wanted = !isLive
+              if (isLive) stopLive($)
+              $.ui.invalidate('ui.render')
+            }}>{isLive ? 'Static' : 'Live'}</Button>
+          )}
+          {plot.kind === 'plotly' && (
+            <Button hotkey="o" onPress={async () => {
               const done = await ensureFormats($, plot, ['html'])
               if (typeof done !== 'string') await $.process.run(['open', done.files.html!])
-            }}>Interactive</Button>
+            }}>Browser</Button>
           )}
         </Box>
       </Box>
     )
+  })
+
+  // From live.tsx: the region's size, and pointer events to forward.
+  on('ui.message', async ($, e, next) => {
+    if (e.requestId !== PANE || !live.plotId) return next(e)
+    const data = e.data as { type?: string; cols?: number; rows?: number; events?: unknown[] }
+    if (data.type === 'size' && data.cols && data.rows) {
+      live.region = { cols: data.cols, rows: data.rows }
+      if (live.pending) {
+        const html = live.pending
+        live.pending = null
+        await liveCall($, '/open', { html, ...live.region })
+      } else {
+        await liveCall($, '/size', live.region)
+      }
+    } else if (data.type === 'input' && Array.isArray(data.events)) {
+      await liveCall($, '/input', { events: data.events })
+    }
+    return next(e)
+  })
+
+  // The wheel over a live figure zooms it rather than scrolling the pane.
+  on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
+    if (!live.plotId || !live.ready || e.by === 0) return next(e)
+    const x = (e.pointer?.column ?? Math.floor((live.region?.cols ?? 2) / 2)) + 0.5
+    const y = (e.pointer?.row ?? Math.floor((live.region?.rows ?? 2) / 2)) - 1 + 0.5 // the title row sits above
+    await liveCall($, '/input', { events: [{ kind: 'wheel', x, y, dy: Math.max(-10, Math.min(10, e.by)) }] })
+    return {}
+  })
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    const closed = await next(e)
+    stopLive($)
+    return closed
   })
 }
