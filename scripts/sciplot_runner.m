@@ -1,8 +1,12 @@
-function sciplot_runner(outdir, formats)
+function sciplot_runner(outdir, formats, latex)
 % Run OUTDIR/script.m headless and export the current figure.
 % FORMATS: comma list from png,pdf,svg,eps,jpg. Prints one SCIPLOT_RESULT JSON line.
 set(groot, 'defaultFigureVisible', 'off');
 set(groot, 'defaultAxesToolbarVisible', 'off');
+if nargin > 2 && latex
+    set(groot, 'defaultTextInterpreter', 'latex', ...
+        'defaultAxesTickLabelInterpreter', 'latex', 'defaultLegendInterpreter', 'latex');
+end
 cd(outdir);
 try
     run(fullfile(outdir, 'script.m'));

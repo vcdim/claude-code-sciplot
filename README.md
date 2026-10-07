@@ -6,13 +6,17 @@ Ask Claude to plot something; it writes the code, sciplot runs it and shows the 
 | Engine | Language | Cost |
 |---|---|---|
 | Python | matplotlib, plotly, seaborn (via `uv`) | free |
-| R | base graphics, ggplot2 | free |
+| R | base graphics, ggplot2 (LaTeX via tikzDevice) | free |
 | LaTeX | TikZ / pgfplots | free |
 | MATLAB | `.m` code (falls back to GNU Octave) | paid |
 | Mathematica | Wolfram Language (`wolframscript`, or the free Wolfram Engine) | paid |
 
 Engines are detected at session start; missing or unlicensed ones are hidden
 from Claude and fall back to a free option. `/sciplot engines` shows status.
+
+Text is rendered with LaTeX by default when TeX is installed (matplotlib `usetex`,
+R `tikzDevice`, MATLAB's LaTeX interpreter), falling back to plain text if a label
+breaks LaTeX. Pass `latex: false` to turn it off.
 
 ## Use
 

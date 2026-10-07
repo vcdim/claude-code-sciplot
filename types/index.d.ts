@@ -8,6 +8,7 @@ export type Plot = {
   height: number
   files: Record<string, string>
   packages: string[]
+  latex?: boolean
 }
 
 declare module 'claude-code' {

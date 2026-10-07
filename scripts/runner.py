@@ -16,8 +16,34 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.text  # noqa: E402
 
 plt.show = lambda *a, **k: None
+
+LATEX = os.environ.get("SCIPLOT_LATEX") == "1"
+if LATEX:
+    texbin = os.environ.get("SCIPLOT_TEXBIN")
+    if texbin:
+        os.environ["PATH"] = texbin + os.pathsep + os.environ.get("PATH", "")
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman"],
+        "font.size": 13,
+    })
+
+
+def save_mpl(fig, path):
+    try:
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+    except Exception as err:  # LaTeX chokes on e.g. a bare underscore in a label
+        if not plt.rcParams["text.usetex"]:
+            raise
+        print(f"sciplot: LaTeX failed ({type(err).__name__}), drew it without LaTeX instead.", file=sys.stderr)
+        plt.rcParams["text.usetex"] = False
+        for text in fig.findobj(matplotlib.text.Text):
+            text.set_usetex(False)
+        fig.savefig(path, dpi=150, bbox_inches="tight")
 
 try:
     import plotly.graph_objects as go
@@ -72,7 +98,7 @@ def main():
             if fmt == "html":
                 continue
             path = os.path.join(out, f"plot.{fmt}")
-            fig.savefig(path, dpi=150, bbox_inches="tight")
+            save_mpl(fig, path)
             files[fmt] = path
     else:
         sys.exit("No figure found: draw with matplotlib, or assign a plotly Figure to `fig`.")

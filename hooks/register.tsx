@@ -131,6 +131,9 @@ function toolDescription(av: Availability): string {
     ...(off.length
       ? [`Not available here (use python instead): ${off.map(l => `${l} (${av[l].why})`).join('; ')}.`]
       : []),
+    bins.pdflatex
+      ? 'Text is rendered with LaTeX by default (`latex`: false to turn off): write labels as LaTeX math, e.g. r"$\\sin(x)$" (python) or "$\\sin(x)$" (R, escape backslashes). Escape bare _ % & in text. Falls back to plain text if LaTeX fails.'
+      : 'TeX is not installed, so `latex` has no effect.',
     'The script runs with its output folder as cwd; each call saves the script plus every export there.',
     '`export` adds formats beyond png: pdf, svg, eps, jpg; python also webp, and html for plotly (interactive).',
     '`exportTo` copies the exports into that directory as <title>.<fmt>.',
@@ -147,6 +150,7 @@ async function registerTool($: EngineInterface) {
         code: { type: 'string', description: 'Plotting code in the chosen language' },
         language: { type: 'string', enum: Object.keys(ENGINES), description: 'Default python' },
         title: { type: 'string', description: 'Short name for the figure' },
+        latex: { type: 'boolean', description: 'LaTeX text rendering (default true when TeX is installed): matplotlib usetex, R tikzDevice, MATLAB latex interpreter. Write labels as LaTeX, e.g. "$\\sin(x)$".' },
         packages: { type: 'array', items: { type: 'string' }, description: 'python only: extra pip packages' },
         export: { type: 'array', items: { type: 'string', enum: FORMATS }, description: 'Extra formats to save' },
         exportTo: { type: 'string', description: 'Directory to copy the exports into' },
@@ -223,9 +227,14 @@ async function runEngine(
   dir: string,
   formats: string[],
   packages: string[],
+  latex = false,
 ): Promise<RunOutcome> {
   const scripts = `${$.plugin.root}/scripts`
-  const long = { timeoutMs: 300_000 }
+  const tex = latex && !!bins.pdflatex
+  const texEnv: Record<string, string> = tex
+    ? { SCIPLOT_LATEX: '1', SCIPLOT_PDFLATEX: bins.pdflatex!, SCIPLOT_TEXBIN: bins.pdflatex!.replace(/\/[^/]+$/, '') }
+    : {}
+  const long = { timeoutMs: 300_000, env: texEnv }
 
   if (lang === 'python') {
     const withs = [...PY_PACKAGES, ...packages].flatMap(p => ['--with', p])
@@ -234,7 +243,7 @@ async function runEngine(
   }
 
   if (lang === 'matlab' && bins.matlab) {
-    const call = `addpath(${mstr(scripts)}); sciplot_runner(${mstr(dir)}, ${mstr(formats.join(','))})`
+    const call = `addpath(${mstr(scripts)}); sciplot_runner(${mstr(dir)}, ${mstr(formats.join(','))}, ${latex})`
     return parseResult(await $.process.run([bins.matlab, '-nodisplay', '-nosplash', '-batch', call], long))
   }
 
@@ -253,7 +262,7 @@ async function runEngine(
   } else if (lang === 'r') {
     ran = await $.process.run([bins.Rscript!, `${scripts}/runner.R`, dir], {
       ...long,
-      env: { SCIPLOT_RLIB: `${home}/.cache/sciplot/Rlib` },
+      env: { ...texEnv, SCIPLOT_RLIB: `${home}/.cache/sciplot/Rlib` },
     })
   } else if (lang === 'tikz') {
     const body = await $.fs.read(`${dir}/script.tex`)
@@ -302,7 +311,7 @@ async function ensureFormats($: EngineInterface, plot: Plot, formats: string[]):
   const ran =
     lang !== 'python' && plot.kind !== 'matlab' && plot.files.pdf
       ? await fromPdf($, plot.dir, missing, plot.kind)
-      : await runEngine($, lang, plot.dir, missing, plot.packages)
+      : await runEngine($, lang, plot.dir, missing, plot.packages, plot.latex ?? false)
   if (!ran.ok) return ran.error
   const next = { ...plot, files: { ...plot.files, ...ran.files } }
   await update($, last, () => next)
@@ -382,7 +391,7 @@ export const register: Register = on => {
 
   on('tool.call', { tool: TOOL }, async ($, e) => {
     const input = e as unknown as {
-      code?: string; language?: string; title?: string; packages?: string[]; export?: string[]; exportTo?: string
+      code?: string; language?: string; title?: string; latex?: boolean; packages?: string[]; export?: string[]; exportTo?: string
     }
     if (!input.code?.trim()) return { deny: '`code` is required.' }
     if (!home) await detect($)
@@ -398,6 +407,7 @@ export const register: Register = on => {
     const unsupported = formats.filter(f => !ENGINES[lang].formats.includes(f))
     if (unsupported.length) return { deny: `${ENGINES[lang].label} cannot export ${unsupported.join(', ')}.` }
 
+    const latex = input.latex ?? !!bins.pdflatex
     const id = newId()
     const title = input.title?.trim() || 'plot'
     const dir = `${home}/.cache/sciplot/${id}`
@@ -407,7 +417,7 @@ export const register: Register = on => {
     const paneWait = openPane($)
     let ran: RunOutcome
     try {
-      ran = await runEngine($, lang, dir, ['png', ...formats.filter(f => f !== 'png')], packages)
+      ran = await runEngine($, lang, dir, ['png', ...formats.filter(f => f !== 'png')], packages, latex)
     } catch (err) {
       ran = { ok: false, error: String(err) }
     } finally {
@@ -424,7 +434,7 @@ export const register: Register = on => {
 
     const plot: Plot = {
       id, dir, title, kind: ran.kind, png: ran.files.png ?? '',
-      width: ran.size[0], height: ran.size[1], files: ran.files, packages,
+      width: ran.size[0], height: ran.size[1], files: ran.files, packages, latex,
     }
     await update($, last, () => plot)
     await update($, history, list => [...(list ?? []), plot].slice(-50))
