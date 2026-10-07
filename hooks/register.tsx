@@ -198,8 +198,8 @@ async function fromPdf($: EngineInterface, dir: string, formats: string[], kind:
   const page = ['-f', '1', '-l', '1']
   for (const fmt of formats) {
     let argv: string[] | null = null
-    if (fmt === 'png') argv = ['-png', '-r', '200', '-singlefile', ...page, pdf, `${dir}/plot`]
-    if (fmt === 'jpg') argv = ['-jpeg', '-r', '200', '-singlefile', ...page, pdf, `${dir}/plot`]
+    if (fmt === 'png') argv = ['-png', '-r', '300', '-singlefile', ...page, pdf, `${dir}/plot`]
+    if (fmt === 'jpg') argv = ['-jpeg', '-r', '300', '-singlefile', ...page, pdf, `${dir}/plot`]
     if (fmt === 'svg') argv = ['-svg', ...page, pdf, `${dir}/plot.svg`]
     if (fmt === 'eps') argv = ['-eps', ...page, pdf, `${dir}/plot.eps`]
     if (!argv) continue

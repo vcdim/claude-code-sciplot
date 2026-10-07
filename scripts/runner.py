@@ -20,6 +20,8 @@ import matplotlib.text  # noqa: E402
 
 plt.show = lambda *a, **k: None
 
+DPI = 300  # same as the pdftocairo and MATLAB engines
+
 LATEX = os.environ.get("SCIPLOT_LATEX") == "1"
 if LATEX:
     texbin = os.environ.get("SCIPLOT_TEXBIN")
@@ -35,7 +37,7 @@ if LATEX:
 
 def save_mpl(fig, path):
     try:
-        fig.savefig(path, dpi=150, bbox_inches="tight")
+        fig.savefig(path, dpi=DPI, bbox_inches="tight")
     except Exception as err:  # LaTeX chokes on e.g. a bare underscore in a label
         if not plt.rcParams["text.usetex"]:
             raise
@@ -43,7 +45,7 @@ def save_mpl(fig, path):
         plt.rcParams["text.usetex"] = False
         for text in fig.findobj(matplotlib.text.Text):
             text.set_usetex(False)
-        fig.savefig(path, dpi=150, bbox_inches="tight")
+        fig.savefig(path, dpi=DPI, bbox_inches="tight")
 
 try:
     import plotly.graph_objects as go

@@ -25,7 +25,7 @@ for fmt = strsplit(formats, ',')
     path = fullfile(outdir, ['plot.' f]);
     switch f
         case {'png', 'jpg'}
-            exportgraphics(fig, path, 'Resolution', 150);
+            exportgraphics(fig, path, 'Resolution', 300);
         case {'pdf', 'eps'}
             exportgraphics(fig, path, 'ContentType', 'vector');
         case 'svg'
