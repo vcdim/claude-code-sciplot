@@ -552,19 +552,18 @@ export const register: Register = on => {
     }
 
     return (
-      <Box flexDirection="column" height={docked ? props.scroll!.bodyRows : undefined}>
+      <Box flexDirection="column">
         <Text bold>
           {plot.title} <Text dimColor>{index >= 0 ? `${index + 1}/${plots.length} · ` : ''}{plot.kind}{working ? ` · rendering ${working}…` : ''}</Text>
         </Text>
         {Image && png ? (
-          // An exact box: a stretched or shrunk one misplaces the picture inside it.
-          <Box width={columns} height={rows} flexShrink={0}>
-            <Image source={{ png }} columns={columns} rows={rows} alt={plot.title} />
-          </Box>
+          // Keep it a direct child of an unsized column: wrapped or in a fixed-height pane it drew clipped or not at all.
+          <Image source={{ png }} columns={columns} rows={rows} alt={plot.title} />
         ) : (
           <Text dimColor>{plot.png}</Text>
         )}
-        {docked && <Box flexGrow={1} />}
+        {/* Docked, a fixed-height spacer (not flexGrow in a sized column) pushes the toolbar to the bottom. */}
+        {docked && Image && png && <Box height={Math.max(0, props.scroll!.bodyRows - 1 - rows - barRows)} />}
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
           <Button hotkey="b" onPress={() => step(-1)} dimColor={index <= 0}>←</Button>
           <Button hotkey="n" onPress={() => step(1)} dimColor={index < 0 || index >= plots.length - 1}>→</Button>
