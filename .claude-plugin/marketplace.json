@@ -1,0 +1,5 @@
+{
+  "name": "sciplot",
+  "owner": { "name": "Qun Gu" },
+  "plugins": [{ "name": "sciplot", "source": "./" }]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "sciplot",
+  "version": "0.2.0",
+  "description": "Scientific plots in a side pane: Python, R, TikZ/pgfplots, MATLAB/Octave, Mathematica; export PDF, SVG and more",
+  "author": { "name": "Qun Gu" },
+  "types": "./types/index.d.ts"
+}
