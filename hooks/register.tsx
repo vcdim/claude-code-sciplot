@@ -133,7 +133,7 @@ function toolDescription(av: Availability): string {
       : []),
     bins.pdflatex
       ? 'Text is rendered with LaTeX by default (`latex`: false to turn off): write labels as LaTeX math, e.g. r"$\\sin(x)$" (python) or "$\\sin(x)$" (R, escape backslashes). Escape bare _ % & in text. Falls back to plain text if LaTeX fails.'
-      : 'TeX is not installed, so `latex` has no effect.',
+      : 'TeX is not installed, so `latex` is off except in MATLAB, whose built-in latex interpreter still renders "$\\sin(x)$" labels. Python: matplotlib mathtext still renders r"$\\sin(x)$". R: no LaTeX, so write plain labels ("sin(x)") or plotmath (expression(sin(x))), never "$...$".',
     'The script runs with its output folder as cwd; each call saves the script plus every export there.',
     '`export` adds formats beyond png: pdf, svg, eps, jpg; python also webp, and html for plotly (interactive).',
     '`exportTo` copies the exports into that directory as <title>.<fmt>.',
@@ -150,7 +150,7 @@ async function registerTool($: EngineInterface) {
         code: { type: 'string', description: 'Plotting code in the chosen language' },
         language: { type: 'string', enum: Object.keys(ENGINES), description: 'Default python' },
         title: { type: 'string', description: 'Short name for the figure' },
-        latex: { type: 'boolean', description: 'LaTeX text rendering (default true when TeX is installed): matplotlib usetex, R tikzDevice, MATLAB latex interpreter. Write labels as LaTeX, e.g. "$\\sin(x)$".' },
+        latex: { type: 'boolean', description: 'LaTeX text rendering (default true when TeX is installed, always for MATLAB): matplotlib usetex, R tikzDevice, MATLAB latex interpreter. Write labels as LaTeX, e.g. "$\\sin(x)$".' },
         packages: { type: 'array', items: { type: 'string' }, description: 'python only: extra pip packages' },
         export: { type: 'array', items: { type: 'string', enum: FORMATS }, description: 'Extra formats to save' },
         exportTo: { type: 'string', description: 'Directory to copy the exports into' },
@@ -426,7 +426,8 @@ export const register: Register = on => {
     const unsupported = formats.filter(f => !ENGINES[lang].formats.includes(f))
     if (unsupported.length) return { deny: `${ENGINES[lang].label} cannot export ${unsupported.join(', ')}.` }
 
-    const latex = input.latex ?? !!bins.pdflatex
+    // MATLAB's latex interpreter is built in; the others need a TeX install.
+    const latex = input.latex ?? (lang === 'matlab' || !!bins.pdflatex)
     const id = newId()
     const title = input.title?.trim() || 'plot'
     const dir = `${home}/.cache/sciplot/${id}`
