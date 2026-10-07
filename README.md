@@ -21,8 +21,8 @@ breaks LaTeX. Pass `latex: false` to turn it off.
 ## Use
 
 - `/sciplot`: open the pane. Keys: `b`/`n` previous/next plot, `p` PDF, `s` SVG,
-  `g` PNG, `i` interactive HTML (plotly).
-- `/sciplot export pdf,svg [dir]`: export the current plot.
+  `g` PNG, `d` delete (moves the plot folder to the Trash), `i` interactive HTML (plotly).
+- `/sciplot export pdf,svg [dir]`: export the current plot. `/sciplot delete`: delete it.
 - Each plot is kept in `~/.cache/sciplot/<timestamp>/` with its script and exports.
 
 Image display needs a terminal with the kitty graphics protocol (Ghostty, kitty,

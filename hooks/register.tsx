@@ -353,6 +353,25 @@ async function copyExports($: EngineInterface, plot: Plot, formats: string[], to
   return copied
 }
 
+// Drop the shown plot from history, show its neighbour, and move its folder to the Trash.
+async function deleteCurrent($: EngineInterface): Promise<string> {
+  const current = await read($, last)
+  if (!current) return 'Nothing to delete.'
+  const list = (await read($, history)) ?? []
+  const at = list.findIndex(p => p.id === current.id)
+  const rest = list.filter(p => p.id !== current.id)
+  await update($, history, () => rest)
+  await update($, last, () => rest[Math.min(Math.max(at, 0), rest.length - 1)] ?? null)
+  const root = `${home}/.cache/sciplot/`
+  if (home && current.dir.startsWith(root) && current.dir.length > root.length) {
+    const trashed = `${home}/.Trash/sciplot-${current.id}`
+    if ((await $.process.run(['mv', current.dir, trashed])).exitCode === 0) {
+      return `Deleted "${current.title}" (moved to ${trashed}).`
+    }
+  }
+  return `Removed "${current.title}" from the pane.`
+}
+
 // Resolves to why the pane is not on screen, or null when it is.
 async function openPane($: EngineInterface): Promise<string | null> {
   try {
@@ -384,7 +403,7 @@ export const register: Register = on => {
     await registerTool($)
     await $.command.register({
       name: 'sciplot',
-      description: 'Show the sciplot pane; /sciplot engines; /sciplot export pdf,svg [dir]',
+      description: 'Show the sciplot pane; /sciplot engines | delete | export pdf,svg [dir]',
     })
     return next(e)
   })
@@ -457,6 +476,10 @@ export const register: Register = on => {
       await detect($)
       await registerTool($)
       return { text: enginesReport() }
+    }
+    if (args[0] === 'delete') {
+      if (!home) await detect($)
+      return { text: await deleteCurrent($) }
     }
     if (args[0] !== 'export') {
       const waiting = await openPane($)
@@ -537,6 +560,7 @@ export const register: Register = on => {
           <Button hotkey="p" onPress={() => exportAndReveal('pdf')}>PDF</Button>
           <Button hotkey="s" onPress={() => exportAndReveal('svg')}>SVG</Button>
           <Button hotkey="g" onPress={() => exportAndReveal('png')}>PNG</Button>
+          <Button hotkey="d" dimColor onPress={async () => $.ui.toast(await deleteCurrent($))}>Delete</Button>
           {plot.kind === 'plotly' && (
             <Button hotkey="i" onPress={async () => {
               const done = await ensureFormats($, plot, ['html'])

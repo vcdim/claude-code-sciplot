@@ -35,3 +35,9 @@ test('a missing engine is refused with a free alternative', async ($, on) => {
   const ran = await $.tool.call({ tool: 'mcp__sciplot__plot', code: 'plot(1:3)', language: 'matlab' })
   expect(String(ran.deny)).toContain('Octave')
 })
+
+test('/sciplot delete with nothing plotted says so', async ($, on) => {
+  on('process.run', async () => ({ value: { exitCode: 0, stdout: 'home=/h\nuv=/bin/uv\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  const ran = await $.command.run({ command: 'sciplot', args: 'delete' } as never)
+  expect(JSON.stringify(ran)).toContain('Nothing to delete')
+})
