@@ -20,7 +20,7 @@ shows the figure in a side pane, ready to export as PDF, SVG or PNG.
 From a Claude Code session:
 
 ```
-/plugin install sciplot --marketplace vcdim/sciplot
+/plugin install sciplot --marketplace vcdim/claude-code-sciplot
 ```
 
 Then `/sciplot` opens the pane. The picture needs a terminal with the kitty
@@ -69,7 +69,7 @@ so any figure can be rerun or edited by hand.
 ## Develop
 
 ```
-git clone https://github.com/vcdim/sciplot && cd sciplot
+git clone https://github.com/vcdim/claude-code-sciplot && cd claude-code-sciplot
 ./run.sh install    # register this folder as a local marketplace and install
 ./run.sh validate   # claude plugin validate
 ./run.sh test       # claude plugin test
