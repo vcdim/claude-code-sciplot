@@ -23,5 +23,5 @@ test('the docked pane draws the plot as an Image sized to its aspect', async ($,
   expect(img).toBeDefined()
   const root = (await ui.drawn()) as { children: { type: string; props: { columns?: number; rows?: number } }[] }
   // The Image sits directly in the column, 95 x 12 cells.
-  expect(root.children[1]).toMatchObject({ type: 'Image', props: { columns: 95, rows: 12 } })
+  expect(root.children[1]).toMatchObject({ type: 'Image', props: { columns: 95, rows: 10 } })
 })

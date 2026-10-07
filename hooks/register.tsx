@@ -530,12 +530,13 @@ export const register: Register = on => {
       png = null
     }
 
-    // Terminal cells are about twice as tall as wide.
+    // Terminal cells are about 2.5x as tall as wide (Ghostty/kitty default fonts); 2 left a gap above and below.
+    const cell = 2.5
     let columns = Math.max(10, Math.min(255, body - 1))
-    let rows = Math.max(4, Math.round((columns * plot.height) / Math.max(1, plot.width) / 2))
+    let rows = Math.max(4, Math.round((columns * plot.height) / Math.max(1, plot.width) / cell))
     if (rows > maxRows) {
       rows = maxRows
-      columns = Math.max(10, Math.min(columns, Math.round((rows * 2 * plot.width) / Math.max(1, plot.height))))
+      columns = Math.max(10, Math.min(columns, Math.round((rows * cell * plot.width) / Math.max(1, plot.height))))
     }
 
     const index = plots.findIndex(p => p.id === plot.id)
@@ -562,7 +563,7 @@ export const register: Register = on => {
         </Text>
         {Image && png ? (
           // Keep it a direct child of an unsized column: wrapped or in a fixed-height pane it drew clipped or not at all.
-          <Image source={{ png }} columns={columns} rows={rows} alt={plot.title} />
+          <Image key={`${plot.id}-${columns}x${rows}`} source={{ png }} columns={columns} rows={rows} alt={plot.title} />
         ) : (
           <Text dimColor>{plot.png}</Text>
         )}
