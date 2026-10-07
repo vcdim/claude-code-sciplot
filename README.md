@@ -1,7 +1,7 @@
 # sciplot
 
-Scientific plots inside [Claude Code](https://claude.com/claude-code). Ask Claude
-to plot something; it writes the code, sciplot runs it in the engine you pick and
+A [Claude Code](https://claude.com/claude-code) mod for scientific plots. Ask
+Claude to plot something; it writes the code, sciplot runs it in the engine you pick and
 shows the figure in a side pane, ready to export as PDF, SVG or PNG.
 
 <p align="center">
