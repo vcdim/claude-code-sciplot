@@ -555,13 +555,15 @@ export const register: Register = on => {
         <Text bold>
           {plot.title} <Text dimColor>{index >= 0 ? `${index + 1}/${plots.length} · ` : ''}{plot.kind}{working ? ` · rendering ${working}…` : ''}</Text>
         </Text>
-        <Box flexDirection="column" flexGrow={1}>
-          {Image && png ? (
+        {Image && png ? (
+          // An exact box: a stretched or shrunk one misplaces the picture inside it.
+          <Box width={columns} height={rows} flexShrink={0}>
             <Image source={{ png }} columns={columns} rows={rows} alt={plot.title} />
-          ) : (
-            <Text dimColor>{plot.png}</Text>
-          )}
-        </Box>
+          </Box>
+        ) : (
+          <Text dimColor>{plot.png}</Text>
+        )}
+        {docked && <Box flexGrow={1} />}
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
           <Button hotkey="b" onPress={() => step(-1)} dimColor={index <= 0}>←</Button>
           <Button hotkey="n" onPress={() => step(1)} dimColor={index < 0 || index >= plots.length - 1}>→</Button>
