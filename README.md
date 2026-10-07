@@ -9,7 +9,11 @@ shows the figure in a side pane, ready to export as PDF, SVG or PNG.
   <img src="docs/mathematica-membrane.png" width="45%" alt="MATLAB logo L-shaped membrane, Mathematica">
 </p>
 
-**[▶ 30 s demo](docs/demo.mp4)**: `plot sin(x)`, then the same figure in MATLAB and pgfplots, in a real Claude Code session.
+<p align="center">
+  <img src="docs/demo.gif" width="90%" alt="plot sin(x) in matplotlib, then re-render it in MATLAB, in a real Claude Code session">
+</p>
+
+`plot sin(x)`, then the same figure in MATLAB and pgfplots, in a real Claude Code session. [Watch the full 30 s demo](docs/demo.mp4).
 
 ```
 > plot sin(x)·sin(y) as a contour map
