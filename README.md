@@ -9,6 +9,8 @@ shows the figure in a side pane, ready to export as PDF, SVG or PNG.
   <img src="docs/mathematica-membrane.png" width="45%" alt="MATLAB logo L-shaped membrane, Mathematica">
 </p>
 
+**[▶ 30 s demo](docs/demo.mp4)**: `plot sin(x)`, then the same figure in MATLAB and pgfplots, in a real Claude Code session.
+
 ```
 > plot sin(x)·sin(y) as a contour map
 > render the MATLAB logo in Mathematica
