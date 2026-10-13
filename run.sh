@@ -9,7 +9,9 @@ usage() {
 
 case "${1:-}" in
   validate) claude plugin validate . ;;
-  test)     claude plugin test . ;;
+  test)
+    claude plugin test .
+    uv run --no-project --quiet --with aiohttp python -m unittest discover -s tests -p 'test_*.py' ;;
   engines)
     for c in uv Rscript pdflatex pdftocairo wolframscript octave-cli matlab; do
       printf "%-14s %s\n" "$c" "$(command -v "$c" || echo -)"

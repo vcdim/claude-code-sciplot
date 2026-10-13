@@ -417,6 +417,13 @@ const live = {
   watcher: 0,
 }
 
+// This session's live view directory (socket and frames), under ~/.cache/sciplot/live/.
+// The hooks module is loaded once per session, so LIVE_SESSION is unique to it.
+const LIVE_SESSION = `${newId()}-${Math.random().toString(36).slice(2, 8)}`
+function liveDir(): string {
+  return `${home}/.cache/sciplot/live/${LIVE_SESSION}`
+}
+
 async function liveCall($: EngineInterface, path: string, body?: unknown): Promise<any> {
   try {
     const res = await $.http.fetch(`http://sciplot${path}`, {
@@ -435,10 +442,13 @@ async function liveCall($: EngineInterface, path: string, body?: unknown): Promi
 function startLive($: EngineInterface): Promise<string | null> {
   if (live.ready) return Promise.resolve(null)
   if (live.starting) return live.starting
-  live.sock = `${home}/.cache/sciplot/live.sock`
+  // Each session gets its own socket and frame directory, so two sessions' viewers
+  // never answer each other's requests or overwrite each other's frames.
+  const dir = liveDir()
+  live.sock = `${dir}/live.sock`
   const argv = [
     bins.uv!, 'run', '--no-project', '--quiet', '--with', 'playwright', '--with', 'aiohttp',
-    'python', `${$.plugin.root}/scripts/live_view.py`, live.sock, `${home}/.cache/sciplot/live`,
+    'python', `${$.plugin.root}/scripts/live_view.py`, live.sock, dir,
   ]
   live.starting = new Promise(resolve => {
     void (async () => {

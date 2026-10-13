@@ -34,8 +34,9 @@ test('a plotly figure goes live: a Client over the picture takes the pointer', a
   })
   const spawned: string[][] = []
   on('process.spawn', async function* (_$, e) {
-    spawned.push((e as unknown as { argv: string[] }).argv)
-    yield { stream: 'stdout', text: '{"ready": "/h/.cache/sciplot/live.sock"}\n' }
+    const argv = (e as unknown as { argv: string[] }).argv
+    spawned.push(argv)
+    yield { stream: 'stdout', text: `{"ready": ${JSON.stringify(argv[argv.length - 2])}}\n` }
     return { value: { code: 0, signal: null } }
   } as never)
   on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: '{"version": 0, "frame": null, "error": null}' } }))
@@ -51,4 +52,8 @@ test('a plotly figure goes live: a Client over the picture takes the pointer', a
   const client = await ui.find({ type: 'Client' } as never)
   expect(client).toMatchObject({ props: { module: 'hooks/live.tsx', width: 95, height: 33 } })
   expect(spawned[0]?.some(arg => arg.endsWith('scripts/live_view.py'))).toBe(true)
+  // The socket and frames live in a directory of this session's own, not a shared one.
+  const [sock, rundir] = spawned[0]!.slice(-2)
+  expect(rundir).toMatch(/^\/h\/\.cache\/sciplot\/live\/[^/]+$/)
+  expect(sock).toBe(`${rundir}/live.sock`)
 })

@@ -2,6 +2,10 @@
 
 usage: live_view.py SOCKET RUNDIR
 
+SOCKET and RUNDIR are private to one Claude Code session. The viewer refuses a
+SOCKET another viewer is serving, and on exit removes only its own SOCKET,
+frames and RUNDIR.
+
 Runs headless Chrome (the installed Google Chrome, else Playwright's Chromium),
 renders the page into PNG frames under RUNDIR, and takes pointer input over an
 HTTP API on the Unix socket SOCKET:
@@ -16,12 +20,14 @@ Exits when its parent process goes away.
 """
 
 import asyncio
+import glob
 import json
 import os
+import signal
+import socket
 import sys
 
 from aiohttp import web
-from playwright.async_api import async_playwright
 
 # CSS pixels per terminal cell; cells are about 2.5x as tall as wide.
 CELL_W = 8
@@ -54,6 +60,8 @@ class View:
         self.held = None
 
     async def start(self):
+        from playwright.async_api import async_playwright
+
         self.pw = await async_playwright().start()
         try:
             self.browser = await self.pw.chromium.launch(channel="chrome")
@@ -143,11 +151,36 @@ class View:
         return {"version": self.version, "frame": self.frame, "error": self.error}
 
 
-async def main():
-    sock, rundir = sys.argv[1], sys.argv[2]
-    os.makedirs(rundir, exist_ok=True)
-    view = View(rundir)
-    await view.start()
+def claim(sock):
+    """Take SOCKET for this viewer: refuse one another viewer is serving, clear a stale one."""
+    if not os.path.exists(sock):
+        return
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.connect(sock)
+    except OSError:
+        os.unlink(sock)  # nobody listening: left over from a viewer that died
+    else:
+        raise RuntimeError(f"another live view is serving {sock}")
+    finally:
+        probe.close()
+
+
+def cleanup(sock, rundir):
+    """Remove this viewer's socket and frames, and its run directory if that leaves it empty."""
+    for path in ([sock] if sock else []) + glob.glob(os.path.join(rundir, "live-*.png")):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    try:
+        os.rmdir(rundir)
+    except OSError:
+        pass
+
+
+async def serve(sock, rundir, view):
+    """Serve VIEW on SOCKET; returns the aiohttp runner (cleanup() it with runner.cleanup())."""
 
     async def body(req):
         try:
@@ -187,17 +220,46 @@ async def main():
         web.post("/open", open_), web.post("/size", size), web.post("/input", input_),
         web.post("/close", close), web.get("/state", state),
     ])
-    runner = web.AppRunner(app, access_log=None)
+    # No TCP keepalive: macOS rejects SO_KEEPALIVE on a Unix socket (EINVAL per connection).
+    runner = web.AppRunner(app, access_log=None, tcp_keepalive=False)
     await runner.setup()
-    if os.path.exists(sock):
-        os.unlink(sock)
+    claim(sock)
     await web.UnixSite(runner, sock).start()
-    print(json.dumps({"ready": sock}), flush=True)
+    return runner
 
-    # Stop when the parent (uv, under the Claude Code session) goes away.
-    parent = os.getppid()
-    while os.getppid() == parent:
-        await asyncio.sleep(2)
+
+async def main():
+    # SOCKET and RUNDIR belong to one Claude Code session: the hooks module picks a
+    # fresh directory per session, so two sessions never share a socket or frames.
+    sock, rundir = sys.argv[1], sys.argv[2]
+    os.makedirs(rundir, exist_ok=True)
+    try:
+        claim(sock)  # fail before starting a browser if the socket is taken
+    except RuntimeError as err:
+        print(err, file=sys.stderr, flush=True)
+        sys.exit(1)
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+    view = View(rundir)
+    runner = None
+    try:
+        await view.start()
+        runner = await serve(sock, rundir, view)
+        print(json.dumps({"ready": sock}), flush=True)
+        # Stop when the parent (uv, under the Claude Code session) goes away.
+        parent = os.getppid()
+        while os.getppid() == parent and not stop.is_set():
+            try:
+                await asyncio.wait_for(stop.wait(), 2)
+            except asyncio.TimeoutError:
+                pass
+    finally:
+        if runner is not None:
+            await runner.cleanup()
+        # Only a viewer that bound the socket may remove it.
+        cleanup(sock if runner is not None else None, rundir)
 
 
 if __name__ == "__main__":
